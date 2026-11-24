@@ -1,3 +1,32 @@
 a.
+To maximally unbalance the quadtree, insert points such that at every subdivision, one point falls into one quadrant while all 
+remaining points fall into the same other quadrant. Repeat this pattern recursively within the quadrant containing the remaining 
+points. This creates a tree resembling a linked list, with only one populated branch at each level.
+- O(1) query: Query a point located in an empty quadrant near the root. The tree can immediately eliminate the remaining subtrees 
+  without examining the stored points.
+- O(n) query: Query a point following the deeply nested populated branch. The traversal must visit each level of the unbalanced tree.
+
 b.
+If the maximum leaf capacity is 8, inserting the exact same point repeatedly causes the leaf to split once it exceeds 8 primitives. 
+However, all identical points belong to the same quadrant, so they continue accumulating in one child, causing repeated subdivisions. 
+This can continue indefinitely, eventually exhausting available precision or memory.
+
+This can be alleviated by:
+- Limiting the maximum subdivision depth.
+- Enforcing a minimum cell size.
+- Allowing a leaf to exceed its capacity when all its primitives occupy the same position.
+
+The last approach is particularly useful because subdividing identical points provides no additional spatial separation.
+
 c.
+
+Quadtrees are sensitive to transformations because their subdivisions are tied to fixed world-space regions.
+
+- Translation: Moving the entire scene can cause objects to cross quadrant boundaries, requiring many objects to be reinserted 
+  or the tree to be rebuilt.
+- Rotation: Rotating the scene changes the spatial distribution of objects relative to the axis-aligned quadrants, potentially 
+  causing many objects to occupy different nodes or straddle boundaries.
+
+Therefore, quadtrees are best suited for relatively static scenes or scenes where objects move infrequently and remain within 
+their existing partitions. They are less suitable for frequently transformed scenes. BVHs are generally better for dynamic 
+scenes because they group objects rather than partitioning fixed regions of space.

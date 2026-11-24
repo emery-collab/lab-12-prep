@@ -179,7 +179,60 @@ public:
     // Returns the number of intersection candidates found
     uint32_t queryIntersecting(const AABB<float>& queryBounds, std::vector<uint32_t>& candidates) {
         // TODO -- do not use recursion, but you may emulate it yourself.
-        return 0;
+        
+        // Nothing can intersect an empty query or a query
+        // which doesn't overlap the root bounds.
+        if (queryBounds.empty() || !mBounds.intersects(queryBounds)) {
+            return 0;
+        }
+
+        // Each stack entry stores a node index and its cell bounds.
+        struct StackEntry {uint32_t nodeIdx; AABB<float> bounds;};
+
+        std::vector<StackEntry> stack;
+        stack.push_back({0, mBounds});
+
+        uint32_t numCandidates = 0;
+
+        while (!stack.empty()) {
+            // Retrieve and remove the next node.
+            StackEntry current = stack.back();
+            stack.pop_back();
+
+            const QuadTreeNode& node = mNodes[current.nodeIdx];
+
+            // Check all primitives stored directly in this node.
+            // This includes straddlers in internal nodes.
+            uint32_t primitiveIdx = node.primitivesIdx;
+
+            while (primitiveIdx != INVALID_IDX) {
+                if (mPrimitiveBounds[primitiveIdx].intersects(queryBounds)) {
+                    candidates.push_back(primitiveIdx);
+                    ++numCandidates;
+                }
+
+                primitiveIdx = mNextPrimitiveIdx[primitiveIdx];
+            }
+
+            // A leaf has no children to visit.
+            if (node.isLeaf()) {
+                continue;
+            }
+
+            // Examine the four children.
+            for (uint32_t dir = 0; dir < 4; ++dir) {
+                AABB<float> childBounds = current.bounds;
+
+                aabbEnter(childBounds, static_cast<OrdinalDirection>(dir));
+
+                // Only visit children whose regions overlap the query.
+                if (childBounds.intersects(queryBounds)) {
+                    stack.push_back({node.childIdx + dir, childBounds});
+                }
+            }
+        }
+
+        return numCandidates;
     }
 
     // suitable for sparse updates
@@ -290,14 +343,69 @@ private:
     // Precondition: currentCell contains query.
     OrdinalDirection aabbQueryQuadrant(const AABB<float>& query,
                                        const AABB<float>& currentCell) const {
-        return {};
+        const sf::Vector2f mid = currentCell.middle();
+
+        // Determine whether the query fits entirely on one side
+        // of the vertical dividing line.
+        bool left = query.maxPoint.x <= mid.x;
+        bool right = query.minPoint.x >= mid.x;
+
+        // Determine whether the query fits entirely on one side
+        // of the horizontal dividing line.
+        bool top = query.maxPoint.y <= mid.y;
+        bool bottom = query.minPoint.y >= mid.y;
+
+        if (left && top) {
+            return NW;
+        }
+        if (right && top) {
+            return NE;
+        }
+        if (left && bottom) {
+            return SW;
+        }
+        if (right && bottom) {
+            return SE;
+        }
+
+        // The query straddles at least one dividing line.
+        return INVALID_DIRECTION;
+
     };
     // TODO
 
     // modifies a given AABB to obtain the resulting AABB if we were entering the cell on its
     // "direction" quadrant
     // Precondition: direction is not INVALID
-    void aabbEnter(AABB<float>& bounds, OrdinalDirection direction) const {};
+    void aabbEnter(AABB<float>& bounds, OrdinalDirection direction) const {
+        const sf::Vector2f mid = bounds.middle();
+
+        // using switch cases here
+        switch (direction) {
+            case NW:
+                bounds.maxPoint = mid;
+                break;
+
+            case NE:
+                bounds.minPoint.y = mid.y;
+                bounds.maxPoint.x = mid.x;
+                break;
+
+            case SW:
+                bounds.minPoint.x = mid.x;
+                bounds.maxPoint.y = mid.y;
+                break;
+
+            case SE:
+                bounds.minPoint = mid;
+                break;
+
+            default:
+                assert(false && "Invalid quadrant direction");
+                break;
+        }
+
+    };
     // TODO
 
     AABB<float> mBounds;
